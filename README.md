@@ -1,1 +1,1 @@
-# WordDocumentReader_ADACA
+This is a simple C# Console app that scans a main directory's folders & sub folders looking for MS Word file and prints out it's properties.
