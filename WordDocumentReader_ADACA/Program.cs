@@ -1,21 +1,24 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using DocumentFormat.OpenXml.CustomProperties;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 
 class Program
 {
     static void Main(string[] args)
     {
-        // Directory Path containing folders, subfolders & MS Word file(s)
         string folderPath = @"C:\Users\JohnHaroldERizaldo\Desktop\WordDocumentReader_ADACA\SampleDirectory";
 
         try
         {
-            //Scan folders & subfolders recursively
+            // Scan folders & subfolders recursively
             ScanFolder(folderPath);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error scanning the diretory {folderPath}: {ex.Message}");
+            Console.WriteLine($"Error scanning the directory {folderPath}: {ex.Message}");
         }
     }
 
@@ -24,7 +27,7 @@ class Program
         // Scan for Microsoft Word Files in the Directory Path
         foreach (string filePath in Directory.GetFiles(folderPath, "*.docx"))
         {
-            PrintFileProperties(filePath);
+            ProcessDocument(filePath);
         }
 
         // Recursively process subfolders
@@ -34,27 +37,45 @@ class Program
         }
     }
 
-    static void PrintFileProperties(string filePath)
+    static void ProcessDocument(string filePath)
     {
-        Console.WriteLine($"File Properties for: {filePath}");
-
-        try
+        using (WordprocessingDocument wordDocument = WordprocessingDocument.Open(filePath, false))
         {
-            // Get Word file properties
-            FileInfo fileInfo = new FileInfo(filePath);
+            //Get the document body of the Word file
+            string fileName = Path.GetFileName(filePath);
 
-            // Print Word file properties
-            Console.WriteLine($"File Name: {fileInfo.Name}");
-            Console.WriteLine($"File Size: {fileInfo.Length} bytes");
-            Console.WriteLine($"Creation Time: {fileInfo.CreationTime}");
-            Console.WriteLine($"Last Access Time: {fileInfo.LastAccessTime}");
-            Console.WriteLine($"Last Write Time: {fileInfo.LastWriteTime}");
-            //Separator
-            Console.WriteLine($"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error processing file {filePath}: {ex.Message}");
+            var bodyProperties = wordDocument.MainDocumentPart.Document.Body;
+
+            Console.WriteLine(fileName);
+
+            try
+            {
+                if (bodyProperties != null)
+                {
+                    Console.WriteLine($"List of Document properties:");
+                    //Get list of elements inside the document body
+                    foreach (var element in bodyProperties.Elements())
+                    {
+                        // Check if the paragraph contains a field with a cross-reference
+                        if (element.InnerText.Contains("REF"))
+                        {
+                            Console.WriteLine($"{element} | Cross-reference: YES");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{element} | Cross-reference: NO");
+                        }
+                    }
+                    //Separator
+                    Console.WriteLine("------------------------------------");
+
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing document {filePath}: {ex.Message}");
+            }
         }
     }
+
 }
