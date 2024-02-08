@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Packaging;
+using System.Reflection;
 using DocumentFormat.OpenXml.CustomProperties;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -13,8 +15,15 @@ class Program
 
         try
         {
+            // Initialize dictionaries to store document properties and their usage
+            Dictionary<string, List<string>> propertyToDocuments = new Dictionary<string, List<string>>();
+            Dictionary<string, List<string>> documentProperties = new Dictionary<string, List<string>>();
+
             // Scan folders & subfolders recursively
-            ScanFolder(folderPath);
+            ScanFolder(folderPath, propertyToDocuments, documentProperties);
+
+            // Print cross-reference
+            PrintCrossReference(propertyToDocuments, documentProperties);
         }
         catch (Exception ex)
         {
@@ -22,60 +31,77 @@ class Program
         }
     }
 
-    static void ScanFolder(string folderPath)
+    static void ScanFolder(string folderPath, Dictionary<string, List<string>> propertyToDocuments, Dictionary<string, List<string>> documentProperties)
     {
         // Scan for Microsoft Word Files in the Directory Path
         foreach (string filePath in Directory.GetFiles(folderPath, "*.docx"))
         {
-            ProcessDocument(filePath);
+            ProcessDocument(filePath, propertyToDocuments, documentProperties);
         }
 
         // Recursively process subfolders
         foreach (string subfolderPath in Directory.GetDirectories(folderPath))
         {
-            ScanFolder(subfolderPath);
+            ScanFolder(subfolderPath, propertyToDocuments, documentProperties);
         }
     }
 
-    static void ProcessDocument(string filePath)
+    static void ProcessDocument(string filePath, Dictionary<string, List<string>> propertyUsage, Dictionary<string, List<string>> documentProperties)
     {
-        using (WordprocessingDocument wordDocument = WordprocessingDocument.Open(filePath, false))
+        try
         {
-            //Get the document body of the Word file
-            string fileName = Path.GetFileName(filePath);
-
-            var bodyProperties = wordDocument.MainDocumentPart.Document.Body;
-
-            Console.WriteLine(fileName);
-
-            try
+            using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(filePath, false))
             {
-                if (bodyProperties != null)
+
+                //Get the Document Body
+                var documentBody = wordDoc.MainDocumentPart.Document.Body.InnerXml;
+                if (documentBody != null)
                 {
-                    Console.WriteLine($"List of Document properties:");
-                    //Get list of elements inside the document body
-                    foreach (var element in bodyProperties.Elements())
+                    //Get the list of Document Properties
+                    PropertyInfo[] properties = typeof(PackageProperties).GetProperties();
+                    foreach (PropertyInfo property in properties)
                     {
-                        // Check if the paragraph contains a field with a cross-reference
-                        if (element.InnerText.Contains("REF"))
+                        string propertyName = property.Name;
+                        //Check if the Document Property is in the Document Body
+                        if (documentBody.Contains(propertyName))
                         {
-                            Console.WriteLine($"{element} | Cross-reference: YES");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"{element} | Cross-reference: NO");
+                            //Add in the List
+                            if (!propertyUsage.ContainsKey(propertyName))
+                                propertyUsage[propertyName] = new List<string>();
+
+                            if (!propertyUsage[propertyName].Contains(Path.GetFileName(filePath)))
+                                propertyUsage[propertyName].Add(Path.GetFileName(filePath));
+
+                            if (!documentProperties.ContainsKey(Path.GetFileName(filePath)))
+                                documentProperties[Path.GetFileName(filePath)] = new List<string>();
+
+                            if (!documentProperties[Path.GetFileName(filePath)].Contains(propertyName))
+                                documentProperties[Path.GetFileName(filePath)].Add(propertyName);
                         }
                     }
-                    //Separator
-                    Console.WriteLine("------------------------------------");
-
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error processing document {filePath}: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing document {filePath}: {ex.Message}");
         }
     }
 
+    static void PrintCrossReference(Dictionary<string, List<string>> propertyUsage, Dictionary<string, List<string>> documentProperties)
+    {
+        // Print the cross-reference
+        foreach (var propUsage in propertyUsage)
+        {
+            Console.WriteLine($"Document Property: {propUsage.Key}");
+            Console.WriteLine("   - Used in:");
+
+            foreach (var docName in propUsage.Value)
+            {
+                Console.WriteLine($"       - {docName}");
+            }
+        }
+
+        Console.WriteLine();
+    }
 }
